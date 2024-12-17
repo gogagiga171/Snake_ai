@@ -76,13 +76,13 @@ class Game:
 
     def move(self, _direction):
         if _direction == 1:
-            new_x = self.snake[0].x - 1
+            new_x = self.snake[0].x + 1
             new_y = self.snake[0].y
         if _direction == 2:
             new_x = self.snake[0].x
             new_y = self.snake[0].y - 1
         if _direction == 3:
-            new_x = self.snake[0].x + 1
+            new_x = self.snake[0].x - 1
             new_y = self.snake[0].y
         if _direction == 4:
             new_x = self.snake[0].x
