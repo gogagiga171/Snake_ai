@@ -36,7 +36,7 @@ class Game:
         self.snake.append(Snake(7, 8))
         self.snake.append(Snake(6, 8))
         self.snake[0].addPart(self.snake[1])
-        self.snake[2].addPart(self.snake[3])
+        self.snake[1].addPart(self.snake[2])
         for s in self.snake:
             self.field[s.x][s.y] = 3
         self.field[self.snake[0].x, self.snake[0].y] = 4
@@ -66,8 +66,8 @@ class Game:
                         self.field[start_pos[0]+j, start_pos[1]] = 1
 
     def addApple(self):
-        x = random.randint(0, 15)
-        y = random.randint(0, 15)
+        x = random.randint(0, 14)
+        y = random.randint(0, 14)
         if self.field[x][y]==0:
             self.field[x][y]=2
             return True
@@ -76,13 +76,13 @@ class Game:
 
     def move(self, _direction):
         if _direction == 1:
-            new_x = self.snake[0].x + 1
+            new_x = self.snake[0].x - 1
             new_y = self.snake[0].y
         if _direction == 2:
             new_x = self.snake[0].x
             new_y = self.snake[0].y - 1
         if _direction == 3:
-            new_x = self.snake[0].x - 1
+            new_x = self.snake[0].x + 1
             new_y = self.snake[0].y
         if _direction == 4:
             new_x = self.snake[0].x
@@ -94,6 +94,49 @@ class Game:
         if self.field[new_x][new_y] == 1:
             return "lose"
 
+        if self.field[new_x][new_y] == 3 or self.field[new_x][new_y] == 4:
+            return "lose"
+
         if self.field[new_x][new_y] == 2:
             self.snake.append(Snake(self.snake[-1].x, self.snake[-1].y))
             self.snake[-2].addPart(self.snake[-1])
+
+        self.snake[0].move(new_x, new_y)
+        self.updateField()
+
+        if 2 not in self.field:
+            if 0 in self.field:
+                self.addApple()
+            else:
+                return "win"
+
+    def updateField(self):
+        for i in range(15):
+            for j in range(15):
+
+                snake = 0
+                for s in self.snake:
+                    if s.x == i and s.y == j:
+                        snake = 3
+                        break
+                if self.snake[0].x == i and self.snake[0].y == j:
+                    snake = 4
+
+
+                if self.field[i, j] != 3 and self.field[i, j] != 4 and snake != 0:
+                    self.field[i, j] = snake
+
+                elif (self.field[i, j] == 3 or self.field[i, j] == 4) and snake == 0:
+                    self.field[i, j] = 0
+
+    def draw(self):
+        for i in range(15):
+            for j in range(15):
+                c = (177, 218, 99, 255)
+                if self.field[i, j] == 1:
+                    c = (55, 66, 7, 255)
+                elif self.field[i, j] == 2:
+                    c = (255, 66, 7, 255)
+                elif self.field[i, j] == 3 or self.field[i, j] == 4:
+                    c = (0, 99, 0, 255)
+                pyray.draw_rectangle(i*20, j*20, 20, 20, c)
