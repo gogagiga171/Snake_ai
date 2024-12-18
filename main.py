@@ -4,7 +4,7 @@ import tensorflow
 import pyray
 import matplotlib.pyplot as plt
 import numpy as np
-from raylib import colors
+import tf_keras as keras
 
 #игра
 
@@ -29,8 +29,26 @@ class Snake:
 class Game:
     field = np.zeros([15, 15])
     snake = []
+    apple = [0, 0]
 
     def __init__(self):
+        self.generateWalls()
+        self.snake.append(Snake(8, 8))
+        self.snake.append(Snake(7, 8))
+        self.snake.append(Snake(6, 8))
+        self.snake[0].addPart(self.snake[1])
+        self.snake[1].addPart(self.snake[2])
+        for s in self.snake:
+            self.field[s.x][s.y] = 3
+        self.field[self.snake[0].x, self.snake[0].y] = 4
+        while not self.addApple():
+            pass
+        self.last_dist = self.calc_dist()
+
+
+    def newGame(self):
+        self.field = np.zeros([15, 15])
+        self.snake = []
         self.generateWalls()
         self.snake.append(Snake(8, 8))
         self.snake.append(Snake(7, 8))
@@ -70,8 +88,12 @@ class Game:
         y = random.randint(0, 14)
         if self.field[x][y]==0:
             self.field[x][y]=2
+            self.apple=[x, y]
             return True
         return False
+
+    def calc_dist(self):
+        return (abs(self.snake[0].x - self.apple[0])+abs(self.snake[0].y - self.apple[1]))**0.5
 
 
     def move(self, _direction):
@@ -104,11 +126,19 @@ class Game:
         self.snake[0].move(new_x, new_y)
         self.updateField()
 
-        if 2 not in self.field:
+        while 2 not in self.field:
             if 0 in self.field:
                 self.addApple()
+                return "ate_apple"
             else:
                 return "win"
+
+        if self.calc_dist() < self.last_dist:
+            self.last_dist = self.calc_dist()
+            return "nearer"
+        if self.calc_dist() > self.last_dist:
+            self.last_dist = self.calc_dist()
+            return "further"
 
     def updateField(self):
         for i in range(15):
@@ -140,3 +170,68 @@ class Game:
                 elif self.field[i, j] == 3 or self.field[i, j] == 4:
                     c = (0, 99, 0, 255)
                 pyray.draw_rectangle(i*20, j*20, 20, 20, c)
+
+
+def create_model():
+    model = keras.Sequential()
+    model.add(keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(15, 15, 1)))
+#    model.add(keras.layers.MaxPooling2D((2, 2)))
+    model.add(keras.layers.Conv2D(64, (3, 3), activation='relu'))
+#    model.add(keras.layers.MaxPooling2D((2, 2)))
+#    model.add(keras.layers.Conv2D(128, (3, 3), activation='relu'))
+    model.add(keras.layers.Flatten())
+    model.add(keras.layers.Dense(512, activation='relu'))
+    model.add(keras.layers.Dropout(0.3))
+    model.add(keras.layers.Dense(4, activation='linear'))
+
+
+    model.compile(optimizer='adam',
+                  loss='mse')
+
+    model.summary()
+    return model
+
+
+def main():
+    pyray.init_window(300, 300, "Snake_ai")
+    model = create_model()
+    g = Game()
+    pyray.set_target_fps(60)
+
+    while not pyray.window_should_close():
+        pyray.clear_background((0, 0, 0, 0))
+        g.draw()
+        pyray.draw_fps(10, 10)
+        pyray.end_drawing()
+
+        input_data = np.expand_dims(g.field, axis=(0, -1))
+        input_data = input_data.astype(np.float32)
+        pred = model.predict(input_data)
+        action = np.argmax(pred)+1
+
+        res = g.move(action)
+
+        if res == "lose":
+            pred[0][action - 1]=-2
+            model.fit(input_data, pred, epochs=1, verbose=0)
+            g.newGame()
+
+        if res == "ate_apple":
+            pred[0][action - 1]=2
+            model.fit(input_data, pred, epochs=1, verbose=0)
+
+        if res == "win":
+            pred[0][action - 1]=5
+            model.fit(input_data, pred, epochs=1, verbose=0)
+            g.newGame()
+
+        if res == "nearer":
+            pred[0][action - 1] = 0.1
+            model.fit(input_data, pred, epochs=1, verbose=0)
+
+        if res == "further":
+            pred[0][action - 1] = -0.1
+            model.fit(input_data, pred, epochs=1, verbose=0)
+
+if __name__=="__main__":
+    main()
