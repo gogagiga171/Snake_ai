@@ -171,16 +171,27 @@ class Game:
                     c = (0, 99, 0, 255)
                 pyray.draw_rectangle(i*20, j*20, 20, 20, c)
 
+    def prepareData(self):
+        data = np.zeros((15, 15, 4))
+        for x in range(1, 5):
+            for i in range(15):
+                for j in range(15):
+                    if self.field[i][j]==x:
+                        data[i][j][x-1] = 1
+        return np.expand_dims(data, axis=0)
+
+
 
 def create_model():
     model = keras.Sequential()
-    model.add(keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(15, 15, 1)))
+    model.add(keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(15, 15, 4)))
 #    model.add(keras.layers.MaxPooling2D((2, 2)))
     model.add(keras.layers.Conv2D(64, (3, 3), activation='relu'))
 #    model.add(keras.layers.MaxPooling2D((2, 2)))
-#    model.add(keras.layers.Conv2D(128, (3, 3), activation='relu'))
+    model.add(keras.layers.Conv2D(128, (3, 3), activation='relu'))
     model.add(keras.layers.Flatten())
     model.add(keras.layers.Dense(512, activation='relu'))
+#    model.add(keras.layers.Dense(1024, activation='relu'))
     model.add(keras.layers.Dropout(0.3))
     model.add(keras.layers.Dense(4, activation='linear'))
 
@@ -196,6 +207,7 @@ def main():
     pyray.init_window(300, 300, "Snake_ai")
     model = create_model()
     g = Game()
+    g.prepareData()
     pyray.set_target_fps(60)
 
     while not pyray.window_should_close():
@@ -204,9 +216,9 @@ def main():
         pyray.draw_fps(10, 10)
         pyray.end_drawing()
 
-        input_data = np.expand_dims(g.field, axis=(0, -1))
-        input_data = input_data.astype(np.float32)
+        input_data = g.prepareData()
         pred = model.predict(input_data)
+        print(pred)
         action = np.argmax(pred)+1
 
         res = g.move(action)
@@ -217,20 +229,20 @@ def main():
             g.newGame()
 
         if res == "ate_apple":
-            pred[0][action - 1]=2
+            pred[0][action - 1] += 2
             model.fit(input_data, pred, epochs=1, verbose=0)
 
         if res == "win":
-            pred[0][action - 1]=5
+            pred[0][action - 1] += 5
             model.fit(input_data, pred, epochs=1, verbose=0)
             g.newGame()
 
         if res == "nearer":
-            pred[0][action - 1] = 0.1
+            pred[0][action - 1] += 0.1
             model.fit(input_data, pred, epochs=1, verbose=0)
 
         if res == "further":
-            pred[0][action - 1] = -0.1
+            pred[0][action - 1] += -0.1
             model.fit(input_data, pred, epochs=1, verbose=0)
 
 if __name__=="__main__":
