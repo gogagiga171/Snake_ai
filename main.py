@@ -203,47 +203,47 @@ def create_model():
     return model
 
 
+def step(model, game, history, mode):
+    input_data = game.prepareData()
+    pred = model.predict(input_data)
+    print(pred)
+    action = np.argmax(pred)+1
+
+    res = game.move(action)
+    history.append([input_data, action, res])
+
+    if res == "lose":
+        mode="analis"
+
+    if res == "win":
+        mode="analis"
+        
+    return model, game, history, mode
+
+def analisys(model, history, mode):
+    for i in history:
+        # TODO: try tf_agents.agents.dqn.dqn_agent
+
+
 def main():
     pyray.init_window(300, 300, "Snake_ai")
     model = create_model()
     g = Game()
     g.prepareData()
     pyray.set_target_fps(60)
+    mode = "game"
+    history = []
 
     while not pyray.window_should_close():
         pyray.clear_background((0, 0, 0, 0))
         g.draw()
         pyray.draw_fps(10, 10)
         pyray.end_drawing()
-
-        input_data = g.prepareData()
-        pred = model.predict(input_data)
-        print(pred)
-        action = np.argmax(pred)+1
-
-        res = g.move(action)
-
-        if res == "lose":
-            pred[0][action - 1]=-2
-            model.fit(input_data, pred, epochs=1, verbose=0)
-            g.newGame()
-
-        if res == "ate_apple":
-            pred[0][action - 1] += 2
-            model.fit(input_data, pred, epochs=1, verbose=0)
-
-        if res == "win":
-            pred[0][action - 1] += 5
-            model.fit(input_data, pred, epochs=1, verbose=0)
-            g.newGame()
-
-        if res == "nearer":
-            pred[0][action - 1] += 0.1
-            model.fit(input_data, pred, epochs=1, verbose=0)
-
-        if res == "further":
-            pred[0][action - 1] += -0.1
-            model.fit(input_data, pred, epochs=1, verbose=0)
+        if mode == "game":
+            model, g, history, mode = step(model, g, history, mode)
+        if mode = "analis":
+            
+        
 
 if __name__=="__main__":
     main()
