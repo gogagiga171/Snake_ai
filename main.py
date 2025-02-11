@@ -3,10 +3,11 @@ import random
 import tensorflow
 import pyray
 import matplotlib.pyplot as plt
+#from tf_agents import dqn_agent
 import numpy as np
 import tf_keras as keras
+from collections import deque
 
-#игра
 
 class Snake:
 
@@ -172,78 +173,101 @@ class Game:
                 pyray.draw_rectangle(i*20, j*20, 20, 20, c)
 
     def prepareData(self):
-        data = np.zeros((15, 15, 4))
-        for x in range(1, 5):
-            for i in range(15):
-                for j in range(15):
-                    if self.field[i][j]==x:
-                        data[i][j][x-1] = 1
+        data = np.zeros(15**2)
+        for i in range(15):
+            for j in range(15):
+                data[j*15+i] = self.field[i][j]
         return np.expand_dims(data, axis=0)
 
 
-
-def create_model():
-    model = keras.Sequential()
-    model.add(keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(15, 15, 4)))
-#    model.add(keras.layers.MaxPooling2D((2, 2)))
-    model.add(keras.layers.Conv2D(64, (3, 3), activation='relu'))
-#    model.add(keras.layers.MaxPooling2D((2, 2)))
-    model.add(keras.layers.Conv2D(128, (3, 3), activation='relu'))
-    model.add(keras.layers.Flatten())
-    model.add(keras.layers.Dense(512, activation='relu'))
-#    model.add(keras.layers.Dense(1024, activation='relu'))
-    model.add(keras.layers.Dropout(0.3))
-    model.add(keras.layers.Dense(4, activation='linear'))
+GAMMA = 0.99
+ALPHA = 0.001
+MEMORY_SIZE = 10000
+BATCH_SIZE = 64
+EPSILON_START = 1.0
+EPSILON_MIN = 0.01
+EPSILON_DECAY = 0.995
 
 
-    model.compile(optimizer='adam',
-                  loss='mse')
-
-    model.summary()
+def build_model(input_shape, output_shape):
+    model = keras.Sequential([
+        keras.layers.Dense(24, activation='relu', input_shape=input_shape),
+        keras.layers.Dense(24, activation='relu'),
+        keras.layers.Dense(output_shape, activation='linear')
+    ])
+    model.compile(optimizer=keras.optimizers.Adam(learning_rate=ALPHA), loss='mse')
     return model
+
+
+class DQNAgent:
+    def __init__(self, state_size, action_size):
+        self.state_size = state_size
+        self.action_size = action_size
+        self.memory = deque(maxlen=MEMORY_SIZE)
+        self.epsilon = EPSILON_START
+        self.model = build_model((state_size,), action_size)
+
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
+
+    def act(self, state):
+        if np.random.rand() <= self.epsilon:
+            return random.randrange(self.action_size)
+        q_values = self.model.predict(state, verbose=0)
+        return np.argmax(q_values[0])
+
+    def replay(self):
+        if len(self.memory) < BATCH_SIZE:
+            return
+        minibatch = random.sample(self.memory, BATCH_SIZE)
+        for state, action, reward, next_state, done in minibatch:
+            target = reward
+            if not done:
+                target += GAMMA * np.amax(self.model.predict(next_state, verbose=0))
+            target_f = self.model.predict(state, verbose=0)
+            target_f[0][action] = target
+            self.model.fit(state, target_f, epochs=1, verbose=0)
+        if self.epsilon > EPSILON_MIN:
+            self.epsilon *= EPSILON_DECAY
 
 
 def main():
     pyray.init_window(300, 300, "Snake_ai")
-    model = create_model()
+    agent = DQNAgent(15**2, 4)
     g = Game()
-    g.prepareData()
-    pyray.set_target_fps(60)
+    EPISODES = 500
 
-    while not pyray.window_should_close():
-        pyray.clear_background((0, 0, 0, 0))
-        g.draw()
-        pyray.draw_fps(10, 10)
-        pyray.end_drawing()
-
-        input_data = g.prepareData()
-        pred = model.predict(input_data)
-        print(pred)
-        action = np.argmax(pred)+1
-
-        res = g.move(action)
-
-        if res == "lose":
-            pred[0][action - 1]=-2
-            model.fit(input_data, pred, epochs=1, verbose=0)
-            g.newGame()
-
-        if res == "ate_apple":
-            pred[0][action - 1] += 2
-            model.fit(input_data, pred, epochs=1, verbose=0)
-
-        if res == "win":
-            pred[0][action - 1] += 5
-            model.fit(input_data, pred, epochs=1, verbose=0)
-            g.newGame()
-
-        if res == "nearer":
-            pred[0][action - 1] += 0.1
-            model.fit(input_data, pred, epochs=1, verbose=0)
-
-        if res == "further":
-            pred[0][action - 1] += -0.1
-            model.fit(input_data, pred, epochs=1, verbose=0)
+    for e in range(EPISODES):
+        g.newGame()
+        total_reward = 0
+        res = "none"
+        state = g.prepareData()
+        for time in range(500):
+            pyray.clear_background((0, 0, 0, 0))
+            g.draw()
+            pyray.draw_fps(10, 10)
+            pyray.end_drawing()
+            action = agent.act(state)
+            res = g.move(action+1)
+            next_state = g.prepareData()
+            if res == "lose":
+                reward = -2
+            if res == "ate_apple":
+                reward = 2
+            if res == "win":
+                reward = 5
+            if res == "nearer":
+                reward = 0.1
+            if res == "further":
+                reward = -0.1
+            done = res == "win" or res == "lose"
+            agent.remember(state, action, reward, next_state, done)
+            state = next_state
+            total_reward += reward
+            if done:
+                print(f"Episode: {e + 1}/{EPISODES}, Score: {total_reward}, Epsilon: {agent.epsilon:.2f}")
+                break
+            agent.replay()
 
 if __name__=="__main__":
     main()
